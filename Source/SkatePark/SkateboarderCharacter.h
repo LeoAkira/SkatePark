@@ -47,13 +47,29 @@ class SKATEPARK_API ASkateboarderCharacter : public ACharacter
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Defaults, meta = (AllowPrivateAccess = "true"))
 	FName SkateboardSocketName;
 
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = Defaults, meta = (AllowPrivateAccess = "true"))
+	float SlopeGravityIntensity = 2.5f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = Defaults, meta = (AllowPrivateAccess = "true"))
+	float SlopeDetectionDistance;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"))
+	float CurrentSlope;
+	
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"))
+	bool bPreparingJump;
+	
 public:
 	// Sets default values for this pawn's properties
 	ASkateboarderCharacter();
 
 protected:
 
-	void OnConstruction(const FTransform& Transform) override;
+	virtual void OnConstruction(const FTransform& Transform) override;
+	
+	void CalculateSlope();
+
+	virtual void Tick(float DeltaSeconds) override;
 	
 	/** Called for movement input */
 	void Move(const FInputActionValue& Value);
@@ -65,8 +81,6 @@ protected:
 
 	void JumpReleased();
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
-	bool bPreparingJump;
 protected:
 
 	virtual void NotifyControllerChanged() override;

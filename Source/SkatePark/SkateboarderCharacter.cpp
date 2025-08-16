@@ -9,7 +9,6 @@
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "InputActionValue.h"
-#include "DynamicMesh/MeshTransforms.h"
 
 // Sets default values
 ASkateboarderCharacter::ASkateboarderCharacter()
@@ -50,6 +49,41 @@ void ASkateboarderCharacter::OnConstruction(const FTransform& Transform)
 {
 	Super::OnConstruction(Transform);
 	SkateboardMesh->AttachToComponent(GetMesh(), FAttachmentTransformRules::SnapToTargetIncludingScale, SkateboardSocketName);
+}
+
+void ASkateboarderCharacter::CalculateSlope()
+{
+	const FVector SkateboardSocketLocation = GetMesh()->GetSocketTransform(SkateboardSocketName, RTS_World).GetLocation();
+	const FVector ForwardSlopeDetection = SkateboardSocketLocation + SlopeDetectionDistance * GetActorForwardVector();
+	const FVector BehindSlopeDetection = SkateboardSocketLocation - SlopeDetectionDistance * GetActorForwardVector();
+	const FVector DeltaHeight = FVector(0, 0, 50);
+	
+	FHitResult Hit;
+	if (!GetWorld()->LineTraceSingleByChannel(Hit, ForwardSlopeDetection + DeltaHeight, ForwardSlopeDetection - DeltaHeight, ECC_WorldStatic))
+	{
+		CurrentSlope = 0;
+		return;
+	}
+	const FVector ForwardSlopeLocation = Hit.Location;
+
+	if (!GetWorld()->LineTraceSingleByChannel(Hit, BehindSlopeDetection + DeltaHeight, BehindSlopeDetection - DeltaHeight, ECC_WorldStatic))
+	{
+		CurrentSlope = 0;
+		return;
+	}
+	const FVector BehindSlopeLocation = Hit.Location;
+	const float Cat = ForwardSlopeLocation.Z - BehindSlopeLocation.Z;
+	const float Hip = (BehindSlopeLocation - ForwardSlopeLocation).Length();
+
+	CurrentSlope = FMath::RadiansToDegrees(FMath::Asin(Cat / Hip));
+}
+
+void ASkateboarderCharacter::Tick(float DeltaSeconds)
+{
+	Super::Tick(DeltaSeconds);
+	CalculateSlope();
+	float SlopeImpulse = -CurrentSlope * SlopeGravityIntensity * DeltaSeconds;
+	AddMovementInput(GetActorForwardVector(), SlopeImpulse);
 }
 
 // Input
