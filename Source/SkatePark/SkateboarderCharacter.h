@@ -41,27 +41,45 @@ class SKATEPARK_API ASkateboarderCharacter : public ACharacter
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
 	UInputAction* LookAction;
 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
+	float RotationSpeed = 1.5f;
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"))
 	UStaticMeshComponent* SkateboardMesh;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Defaults, meta = (AllowPrivateAccess = "true"))
-	FName SkateboardSocketName;
+	FName SkateboardLeftFootSocketName;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Defaults, meta = (AllowPrivateAccess = "true"))
+	FName SkateboardRightFootSocketName;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = Defaults, meta = (AllowPrivateAccess = "true"))
-	float SlopeGravityIntensity = 2.5f;
+	float SlopeGravityIntensity = 200.f;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = Defaults, meta = (AllowPrivateAccess = "true"))
-	float SlopeDetectionDistance;
+	float SlopeDetectionDistance = 50.f;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"))
 	float CurrentSlope;
 	
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"))
 	bool bPreparingJump;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = Defaults, meta = (AllowPrivateAccess = "true"))
+	float GroundDrag = 10.f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = Defaults, meta = (AllowPrivateAccess = "true"))
+	float MaxMovement = 100.f;
 	
 public:
 	// Sets default values for this pawn's properties
 	ASkateboarderCharacter();
+
+	UFUNCTION(BlueprintPure)
+	FVector GetLeftFootSocketLocation() const;
+
+	UFUNCTION(BlueprintPure)
+	FVector GetRightFootSocketLocation() const;
 
 protected:
 
@@ -81,12 +99,16 @@ protected:
 
 	void JumpReleased();
 
-protected:
-
 	virtual void NotifyControllerChanged() override;
 
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 
+private:
+	FVector GetAdjustedLocation(const FTransform& Transform) const;
+	void AddMovement(float Amount);
+	void Brake(float Amount);
+	float Inertia;
+	
 public:
 	/** Returns CameraBoom subobject **/
 	FORCEINLINE class USpringArmComponent* GetCameraBoom() const { return CameraBoom; }

@@ -23,11 +23,11 @@ ASkateboarderCharacter::ASkateboarderCharacter()
 
 	// Note: For faster iteration times these variables, and many more, can be tweaked in the Character Blueprint
 	// instead of recompiling to adjust them
-	GetCharacterMovement()->JumpZVelocity = 400.f;
+	GetCharacterMovement()->JumpZVelocity = 500.f;
 	GetCharacterMovement()->AirControl = 0.35f;
 	GetCharacterMovement()->MaxWalkSpeed = 1000.f;
 	GetCharacterMovement()->MinAnalogWalkSpeed = 20.f;
-	GetCharacterMovement()->GroundFriction = 0.1f;
+	GetCharacterMovement()->GroundFriction = 1000.f;
 	GetCharacterMovement()->BrakingDecelerationWalking = 0.f;
 	GetCharacterMovement()->BrakingDecelerationFalling = 0.0f;
 
@@ -43,20 +43,31 @@ ASkateboarderCharacter::ASkateboarderCharacter()
 	FollowCamera->bUsePawnControlRotation = false; // Camera does not rotate relative to arm
 
 	SkateboardMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("SkateboardMesh"));
+	SkateboardMesh->SetupAttachment(GetRootComponent());
+}
+
+FVector ASkateboarderCharacter::GetLeftFootSocketLocation() const
+{
+	return GetAdjustedLocation(SkateboardMesh->GetSocketTransform(SkateboardLeftFootSocketName, RTS_Component));
+}
+
+FVector ASkateboarderCharacter::GetRightFootSocketLocation() const
+{
+	return GetAdjustedLocation(SkateboardMesh->GetSocketTransform(SkateboardRightFootSocketName, RTS_Component));
 }
 
 void ASkateboarderCharacter::OnConstruction(const FTransform& Transform)
 {
+	GetMesh()->AttachToComponent(SkateboardMesh, FAttachmentTransformRules::KeepRelativeTransform);
 	Super::OnConstruction(Transform);
-	SkateboardMesh->AttachToComponent(GetMesh(), FAttachmentTransformRules::SnapToTargetIncludingScale, SkateboardSocketName);
 }
 
 void ASkateboarderCharacter::CalculateSlope()
 {
-	const FVector SkateboardSocketLocation = GetMesh()->GetSocketTransform(SkateboardSocketName, RTS_World).GetLocation();
+	const FVector SkateboardSocketLocation = SkateboardMesh->GetComponentLocation();
 	const FVector ForwardSlopeDetection = SkateboardSocketLocation + SlopeDetectionDistance * GetActorForwardVector();
 	const FVector BehindSlopeDetection = SkateboardSocketLocation - SlopeDetectionDistance * GetActorForwardVector();
-	const FVector DeltaHeight = FVector(0, 0, 50);
+	const FVector DeltaHeight = GetActorUpVector() * 50;
 	
 	FHitResult Hit;
 	if (!GetWorld()->LineTraceSingleByChannel(Hit, ForwardSlopeDetection + DeltaHeight, ForwardSlopeDetection - DeltaHeight, ECC_WorldStatic))
@@ -75,15 +86,29 @@ void ASkateboarderCharacter::CalculateSlope()
 	const float Cat = ForwardSlopeLocation.Z - BehindSlopeLocation.Z;
 	const float Hip = (BehindSlopeLocation - ForwardSlopeLocation).Length();
 
-	CurrentSlope = FMath::RadiansToDegrees(FMath::Asin(Cat / Hip));
+	CurrentSlope = Cat / Hip;
+
+	FRotator ActorRotation = GetActorRotation();
+	ActorRotation.Pitch = FMath::RadiansToDegrees(FMath::Asin(Cat / Hip));
+	ActorRotation.Roll = 0;
+	SetActorRotation(ActorRotation);
 }
 
 void ASkateboarderCharacter::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
-	CalculateSlope();
-	float SlopeImpulse = -CurrentSlope * SlopeGravityIntensity * DeltaSeconds;
-	AddMovementInput(GetActorForwardVector(), SlopeImpulse);
+	if (UPawnMovementComponent* MovementComponent = GetMovementComponent())
+	{
+		if (MovementComponent->IsMovingOnGround())
+		{
+			CalculateSlope();
+			AddMovement(-CurrentSlope * SlopeGravityIntensity * DeltaSeconds);
+			
+			AddMovement(-GroundDrag * DeltaSeconds);
+		}
+		
+		AddMovementInput(GetActorForwardVector(), Inertia * DeltaSeconds);
+	}
 }
 
 // Input
@@ -119,33 +144,49 @@ void ASkateboarderCharacter::SetupPlayerInputComponent(UInputComponent* PlayerIn
 	}
 }
 
+FVector ASkateboarderCharacter::GetAdjustedLocation(const FTransform& Transform) const
+{
+	FVector Location = Transform.GetLocation();
+	Location *= Transform.GetScale3D();
+	return Transform.Rotator().RotateVector(Location);
+}
+
+void ASkateboarderCharacter::AddMovement(float Amount)
+{
+	Inertia += Amount;
+	if (Inertia < -0.5f)
+	{
+		Inertia = -Inertia;
+		AddActorLocalRotation(FRotator(0, 180, 0));
+	}
+	Inertia = FMath::Min(Inertia, MaxMovement);
+}
+
+void ASkateboarderCharacter::Brake(float Amount)
+{
+	Inertia -= Amount;
+	if (Inertia < 0)
+	{
+		Inertia = 0;
+		GetMovementComponent()->StopMovementImmediately();
+	}
+}
+
 void ASkateboarderCharacter::Move(const FInputActionValue& Value)
 {
 	// input is a Vector2D
 	const FVector2D MovementVector = Value.Get<FVector2D>();
-
-	if (UPawnMovementComponent* MovementComponent = GetMovementComponent())
+	if (GetMovementComponent()->IsMovingOnGround())
 	{
-		FVector Velocity = MovementComponent->Velocity;
-
-		//Movement Input
-		if (MovementVector.Y != 0)
+		if (MovementVector.Y > 0)
 		{
-			if (MovementVector.Y > 0.f || Velocity.Dot(GetActorForwardVector()) > 0.f)
-			{
-				AddMovementInput(GetActorForwardVector(), MovementVector.Y);
-			}
+			AddMovement(MovementVector.Y);
 		}
-		
-		//Rotation Input
-		if (MovementVector.X != 0)
+		else
 		{
-			AddActorLocalRotation(FRotator(0, MovementVector.X, 0));
-
-			Velocity = Velocity.RotateAngleAxis(MovementVector.X, FVector::UpVector);
-			MovementComponent->Velocity = Velocity;
-			MovementComponent->UpdateComponentVelocity();
+			Brake(-MovementVector.Y);
 		}
+		AddActorLocalRotation(FRotator(0, RotationSpeed * MovementVector.X, 0));
 	}
 }
 
