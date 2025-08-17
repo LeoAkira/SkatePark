@@ -67,7 +67,7 @@ void ASkateboarderCharacter::CalculateSlope()
 	const FVector SkateboardSocketLocation = SkateboardMesh->GetComponentLocation();
 	const FVector ForwardSlopeDetection = SkateboardSocketLocation + SlopeDetectionDistance * GetActorForwardVector();
 	const FVector BehindSlopeDetection = SkateboardSocketLocation - SlopeDetectionDistance * GetActorForwardVector();
-	const FVector DeltaHeight = GetActorUpVector() * 50;
+	const FVector DeltaHeight = GetActorUpVector() * 200;
 	
 	FHitResult Hit;
 	if (!GetWorld()->LineTraceSingleByChannel(Hit, ForwardSlopeDetection + DeltaHeight, ForwardSlopeDetection - DeltaHeight, ECC_WorldStatic))
@@ -87,27 +87,49 @@ void ASkateboarderCharacter::CalculateSlope()
 	const float Hip = (BehindSlopeLocation - ForwardSlopeLocation).Length();
 
 	CurrentSlope = Cat / Hip;
+}
 
-	FRotator ActorRotation = GetActorRotation();
-	ActorRotation.Pitch = FMath::RadiansToDegrees(FMath::Asin(Cat / Hip));
-	ActorRotation.Roll = 0;
-	SetActorRotation(ActorRotation);
+void ASkateboarderCharacter::WallCheck()
+{
+	const FVector HighStartVector = GetActorLocation() + GetActorForwardVector() * 50 + GetActorUpVector() * 50;
+	const FVector LowStartVector = GetActorLocation() + GetActorForwardVector() * 50 - GetActorUpVector() * 50;
+	const FVector DistTest = GetActorForwardVector() * 10;
+
+	FHitResult Hit;
+	if (!GetWorld()->LineTraceSingleByChannel(Hit, HighStartVector, HighStartVector + DistTest, ECC_WorldStatic))
+	{
+		if (!GetWorld()->LineTraceSingleByChannel(Hit, LowStartVector, LowStartVector + DistTest, ECC_WorldStatic))
+		{
+			return;
+		}
+	}
+	const float Dot = GetActorForwardVector().Dot(Hit.ImpactNormal);
+	Inertia *= -Dot * 0.5f;
+	
+	const FVector MirrorVector = GetActorForwardVector().MirrorByVector(Hit.ImpactNormal);
+	SetActorRotation(MirrorVector.Rotation());
+	
 }
 
 void ASkateboarderCharacter::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
-	if (UPawnMovementComponent* MovementComponent = GetMovementComponent())
+
+	WallCheck();
+	CalculateSlope();
+	FRotator ActorRotation = GetActorRotation();
+	float SlopeAngle = FMath::RadiansToDegrees(FMath::Asin(CurrentSlope));
+	ActorRotation.Pitch = FMath::Min(SlopeAngle, MaxSlopeAngle);
+	ActorRotation.Roll = 0;
+	SetActorRotation(ActorRotation);
+	
+	AddMovement(-CurrentSlope * SlopeGravityIntensity * DeltaSeconds);
+
+	AddMovementInput(GetActorForwardVector(), Inertia * DeltaSeconds);
+	
+	if (GetMovementComponent()->IsMovingOnGround())
 	{
-		if (MovementComponent->IsMovingOnGround())
-		{
-			CalculateSlope();
-			AddMovement(-CurrentSlope * SlopeGravityIntensity * DeltaSeconds);
-			
-			AddMovement(-GroundDrag * DeltaSeconds);
-		}
-		
-		AddMovementInput(GetActorForwardVector(), Inertia * DeltaSeconds);
+		Brake(GroundDrag);
 	}
 }
 
@@ -154,12 +176,12 @@ FVector ASkateboarderCharacter::GetAdjustedLocation(const FTransform& Transform)
 void ASkateboarderCharacter::AddMovement(float Amount)
 {
 	Inertia += Amount;
-	if (Inertia < -0.5f)
+	if (Inertia < -0.01f)
 	{
 		Inertia = -Inertia;
-		AddActorLocalRotation(FRotator(0, 180, 0));
+		RotateActorAroundUpVector(180);
 	}
-	Inertia = FMath::Min(Inertia, MaxMovement);
+	Inertia = FMath::Clamp(Inertia, -2.f, MaxMovement);
 }
 
 void ASkateboarderCharacter::Brake(float Amount)
@@ -172,21 +194,34 @@ void ASkateboarderCharacter::Brake(float Amount)
 	}
 }
 
+void ASkateboarderCharacter::RotateActorAroundUpVector(const float Angle)
+{
+	FVector ActorForward = GetActorForwardVector();
+	ActorForward = ActorForward.RotateAngleAxis(Angle, GetActorUpVector());
+	SetActorRotation(ActorForward.Rotation());
+}
+
 void ASkateboarderCharacter::Move(const FInputActionValue& Value)
 {
 	// input is a Vector2D
 	const FVector2D MovementVector = Value.Get<FVector2D>();
 	if (GetMovementComponent()->IsMovingOnGround())
 	{
-		if (MovementVector.Y > 0)
+		if (MovementVector.Y != 0)
 		{
-			AddMovement(MovementVector.Y);
+			if (MovementVector.Y > 0)
+			{
+				AddMovement(MovementVector.Y);
+			}
+			else
+			{
+				Brake(-MovementVector.Y);
+			}
 		}
-		else
+		if (MovementVector.X != 0)
 		{
-			Brake(-MovementVector.Y);
+			RotateActorAroundUpVector(RotationSpeed * MovementVector.X);
 		}
-		AddActorLocalRotation(FRotator(0, RotationSpeed * MovementVector.X, 0));
 	}
 }
 

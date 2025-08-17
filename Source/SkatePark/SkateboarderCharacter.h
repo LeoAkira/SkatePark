@@ -54,10 +54,13 @@ class SKATEPARK_API ASkateboarderCharacter : public ACharacter
 	FName SkateboardRightFootSocketName;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = Defaults, meta = (AllowPrivateAccess = "true"))
-	float SlopeGravityIntensity = 200.f;
+	float SlopeGravityIntensity = 0.25f;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = Defaults, meta = (AllowPrivateAccess = "true"))
 	float SlopeDetectionDistance = 50.f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = Defaults, meta = (AllowPrivateAccess = "true"))
+	float MaxSlopeAngle = 60.f;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"))
 	float CurrentSlope;
@@ -66,7 +69,7 @@ class SKATEPARK_API ASkateboarderCharacter : public ACharacter
 	bool bPreparingJump;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = Defaults, meta = (AllowPrivateAccess = "true"))
-	float GroundDrag = 10.f;
+	float GroundDrag = 0.1f;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = Defaults, meta = (AllowPrivateAccess = "true"))
 	float MaxMovement = 100.f;
@@ -86,6 +89,8 @@ protected:
 	virtual void OnConstruction(const FTransform& Transform) override;
 	
 	void CalculateSlope();
+
+	void WallCheck();
 
 	virtual void Tick(float DeltaSeconds) override;
 	
@@ -107,6 +112,7 @@ private:
 	FVector GetAdjustedLocation(const FTransform& Transform) const;
 	void AddMovement(float Amount);
 	void Brake(float Amount);
+	void RotateActorAroundUpVector(float Angle);
 	float Inertia;
 	
 public:
