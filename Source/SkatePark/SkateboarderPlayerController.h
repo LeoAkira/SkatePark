@@ -13,5 +13,6 @@ UCLASS()
 class SKATEPARK_API ASkateboarderPlayerController : public APlayerController
 {
 	GENERATED_BODY()
-	
+
+	virtual void OnPossess(APawn* InPawn) override;
 };
