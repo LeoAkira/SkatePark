@@ -20,8 +20,11 @@ public:
 	UFUNCTION(BlueprintCallable)
 	void AddScore(const int32 Score, const FString& ScoreMessage);
 
-	FOnScored OnScored;
+	UFUNCTION(BlueprintCallable)
+	int32 GetScore() const { return CurrentScore; }
 	
+	UPROPERTY()
+	FOnScored OnScored;
 private:
 	int32 CurrentScore;
 };

@@ -7,6 +7,7 @@
 #include "SkateboardGameMode.generated.h"
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnUpdateMatchTime, int32, NewTime);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnMatchFinished);
 
 /**
  * 
@@ -21,8 +22,10 @@ public:
 	int32 GetMatchDuration() const { return MatchDuration; }
 
 	virtual void StartMatch() override;
+	virtual void EndMatch() override;
 
 	FOnUpdateMatchTime OnUpdateMatchTime;
+	FOnMatchFinished OnMatchFinished;
 
 protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"))

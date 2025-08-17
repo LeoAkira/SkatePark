@@ -12,11 +12,17 @@ void ASkateboardGameMode::StartMatch()
 	GetWorld()->GetTimerManager().SetTimer(TimerHandle, this, &ASkateboardGameMode::UpdateMatchTimer, 1, true);
 }
 
+void ASkateboardGameMode::EndMatch()
+{
+	OnMatchFinished.Broadcast();
+	Super::EndMatch();
+}
+
 void ASkateboardGameMode::UpdateMatchTimer()
 {
 	CurrentMatchTime--;
 	OnUpdateMatchTime.Broadcast(CurrentMatchTime);
-	if (CurrentMatchTime <= 0)
+	if (CurrentMatchTime == 0)
 	{
 		EndMatch();
 		TimerHandle.Invalidate();

@@ -4,6 +4,7 @@
 #include "GameHUD.h"
 #include "Blueprint/UserWidget.h"
 #include "PlayerDisplay.h"
+#include "EndGameDisplay.h"
 #include "ScoreSubsystem.h"
 #include "SkateboardGameMode.h"
 
@@ -23,6 +24,7 @@ void AGameHUD::InitializeHUD()
 	{
 		UpdateTimer(GameMode->GetMatchDuration());
 		GameMode->OnUpdateMatchTime.AddDynamic(this, &AGameHUD::UpdateTimer);
+		GameMode->OnMatchFinished.AddDynamic(this, &AGameHUD::OnMatchFinished);
 	}
 }
 
@@ -34,4 +36,12 @@ void AGameHUD::OnScored(const int32 TotalScore, const int32 NewScore, const FStr
 void AGameHUD::UpdateTimer(int32 NewTime)
 {
 	PlayerDisplay->UpdateRemainingTime(NewTime);
+}
+
+void AGameHUD::OnMatchFinished()
+{
+	PlayerDisplay->RemoveFromParent();
+	EndGameDisplay = CreateWidget<UEndGameDisplay>(GetWorld(), EndGameDisplayClass);
+	EndGameDisplay->AddToViewport();
+	EndGameDisplay->ShowEndGame(GetGameInstance()->GetSubsystem<UScoreSubsystem>()->GetScore());
 }
